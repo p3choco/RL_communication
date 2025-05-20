@@ -58,6 +58,10 @@ class BoardsWrapper:
         
     def _instant_reward(self, action_history, board_history):
         instant_reward, _ = self.env.reward_function()
+        targets_hit = False
+        if instant_reward == 1:
+            targets_hit = True
+
         instant_reward *= self.instant_multiplier * (self.num_moves / self.max_moves)
         if False not in (board_history[-1] * self._color_filter == board_history[-3] * self._color_filter):
             instant_reward += -0.5 * self.instant_multiplier
@@ -67,7 +71,7 @@ class BoardsWrapper:
             instant_reward += -0.25 * self.instant_multiplier
         else:
             instant_reward += 0.25 * self.instant_multiplier
-        return instant_reward
+        return instant_reward, targets_hit
     
     def render(self):
         title = f"Performance: {self.final_performance}" if self.done else None
@@ -95,7 +99,7 @@ class BoardsWrapper:
 
         self.env.sender_agent_action(action)
 
-        instant_reward = self._instant_reward(self.sender_action_history, self.sender_board_history)
+        instant_reward, targets_hit = self._instant_reward(self.sender_action_history, self.sender_board_history)
 
         if self.num_moves >= self.max_moves:
             self._end_episode()
@@ -113,9 +117,9 @@ class BoardsWrapper:
         
         self.env.receiver_agent_action(action)
         
-        instant_reward = self._instant_reward(self.receiver_action_history, self.receiver_board_history)
+        instant_reward, targets_hit = self._instant_reward(self.receiver_action_history, self.receiver_board_history)
 
-        if self.num_moves >= self.max_moves:
+        if self.num_moves >= self.max_moves or targets_hit:
             self._end_episode()
 
         self.animation_frames.append(self.env.draw_boards())

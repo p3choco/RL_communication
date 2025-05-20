@@ -35,7 +35,7 @@ def train_agents(env: BoardsWrapper, sender_agent: PPOAgent | RandomAgent, recei
                     receiver_agent.remember(receiver_state, receiver_action, receiver_action_probs, receiver_value, receiver_reward, False)
         
         performances.append(final_performance)
-        
+
         if isinstance(sender_agent, PPOAgent):
             sender_agent.learn()
         if isinstance(receiver_agent, PPOAgent):

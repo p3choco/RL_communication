@@ -71,7 +71,7 @@ class BoardsImplementation:
             distances.append(distance)
             
         self.neutral_distance = max(sum(distances) / n, 0.5)
-        
+
     
     def populate_boards(self): # Could also be used to reset the environment to a random state.
         # Create mixed up lists of coordinates for both boards to get non repeating positions for random placements of the objects.
@@ -112,19 +112,25 @@ class BoardsImplementation:
             board1_img[y, x, 1] = 255 # Clues on channel 1. (Green)
         for x, y in (self.board2_questions if self.linked_shadows else self.board1_q_shadows):
             # If the shadows are linked we can just use the positions of objects generating them on the other board.
-            board1_img[y, x, 2] = 255 # Shadows on channel 2. (Blue)
+            # TODO przepisać to co trzeba
+            board1_img[1, x, 2] = 255 # Shadows on channel 2. (Blue)
             # Shadows can overlap with other objects.
         return board1_img
     
     def receiver_agent_view(self): # Receiver agent can only see board 2.
         board2_img = np.zeros((self.size, self.size, 3), dtype = np.uint8)
-        for x, y in self.board2_guesses:
+        for i, (x, y) in enumerate(self.board2_guesses):
             board2_img[y, x, 0] = 255 # Guesses on channel 0. (Red)
+
+            if i < len(self.board1_landmarks) and (x, y) == self.board1_landmarks[i]:
+                board2_img[y, x, :] = [127, 127, 127]
+
         for x, y in self.board2_questions:
             board2_img[y, x, 1] = 255 # Questions on channel 1. (Green)
         for x, y in (self.board1_clues if self.linked_shadows else self.board2_c_shadows):
             # If the shadows are linked we can just use the positions of objects generating them on the other board.
-            board2_img[y, x, 2] = 255 # Shadows on channel 2. (Blue)
+            # TODO przepisać to co trzeba
+            board2_img[1, x, 2] = 255 # Shadows on channel 2. (Blue)
             # Shadows can overlap with other objects.
         return board2_img
     
