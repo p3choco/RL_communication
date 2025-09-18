@@ -17,7 +17,7 @@ class BoardsWrapper:
         self.history_len = history_len
         # Do nothing action, and 4 actions for every movable object on the board belonging to the agent.
         self.sender_n_actions = 1 + 4 * env.n_clues # Clues are moveable.
-        self.receiver_n_actions = 1 + 4 * env.n_questions + 4 * env.n_landmarks # Question and guesses are moveable.
+        self.receiver_n_actions = 1 + 2 * env.n_shadows + 4 * env.n_landmarks # Shadows (binary channel) and guesses are moveable.
         # The number of guesses is equal to the number of landmarks.
         self.board_size = env.size # Both boards are square and have the same size.
         self.n_color_channels = 3

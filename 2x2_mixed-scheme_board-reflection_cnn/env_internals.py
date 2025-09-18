@@ -39,6 +39,15 @@ class BoardsImplementation:
             self.sender_agent_actions.append(("clue", i, np.array([-1, 0]))) # Left
             self.sender_agent_actions.append(("clue", i, np.array([1, 0]))) # Right
             
+        # --- Binary shadow channel setup ---
+        self.shadow_row = 1  # Fixed row for shadow channel (can be parameterized)
+        self.n_shadows = self.size  # One shadow per column
+        # Each shadow can be present (at (col, shadow_row)) or absent (off-board: (-1, -1))
+        self.shadow_present_positions = [(col, self.shadow_row) for col in range(self.n_shadows)]
+        self.shadow_absent_position = None
+        # Initialize all shadows as absent
+        self.board2_questions = [self.shadow_absent_position for _ in range(self.n_shadows)]
+        
         self.receiver_agent_actions = list()
         self.receiver_agent_actions.append(None) # Do nothing action.
         for i in range(n_landmarks): # Receiver agent can move guess objects on board 2.
@@ -46,11 +55,10 @@ class BoardsImplementation:
             self.receiver_agent_actions.append(("guess", i, np.array([0, 1]))) # Down
             self.receiver_agent_actions.append(("guess", i, np.array([-1, 0]))) # Left
             self.receiver_agent_actions.append(("guess", i, np.array([1, 0]))) # Right
-        for i in range(n_questions): # Receiver agent can also move question objects on board 2.
-            self.receiver_agent_actions.append(("question", i, np.array([0, -1]))) # Up
-            self.receiver_agent_actions.append(("question", i, np.array([0, 1]))) # Down
-            self.receiver_agent_actions.append(("question", i, np.array([-1, 0]))) # Left
-            self.receiver_agent_actions.append(("question", i, np.array([1, 0]))) # Right
+        # For each shadow, two actions: present or absent
+        for i in range(self.n_shadows): #TODO its off board
+            self.receiver_agent_actions.append(("question", i, np.array([0, 0])))  # Present (set at (col, shadow_row))
+            self.receiver_agent_actions.append(("question", i, np.array([-1, -1])))  # Absent (set off-board)
         
         self._calculate_neutral_distance()
         self.populate_boards() # Assign positions to objects on the boards.
@@ -66,6 +74,7 @@ class BoardsImplementation:
             board1_space_picks = [(int(i[0]), int(i[1])) for i in private_rng.permutation(all_coordinates)]
             board2_space_picks = [(int(i[0]), int(i[1])) for i in private_rng.permutation(all_coordinates)]
             board1_landmarks = board1_space_picks[:self.n_landmarks]
+            board2_space_picks = [(int(i[0]), int(i[1])) for i in private_rng.permutation(all_coordinates)]
             board2_guesses = board2_space_picks[:self.n_landmarks]
             distance = self.distance_func(board1_landmarks, board2_guesses)
             distances.append(distance)
@@ -91,18 +100,18 @@ class BoardsImplementation:
         
         # Establish positions of clues on board 1.
         self.board1_clues = board1_space_picks[:self.n_clues]
-        # board1_space_picks = board1_space_picks[self.n_clues:] # Not needed.
         self.board1_clues.sort()
         self.board2_c_shadows = self.board1_clues.copy() # Used only if shadows are frozen.
-        
-        # Establish positions of questions on board 2.
-        self.board2_questions = board2_space_picks[:self.n_questions]
-        # board2_space_picks = board2_space_picks[self.n_questions:] # Not needed.
-        self.board2_questions.sort()
+        # --- For binary shadow channel, initialize all shadows as absent ---
+        self.board2_questions = [self.shadow_absent_position for _ in range(self.n_shadows)]
         self.board1_q_shadows = self.board2_questions.copy() # Used only if shadows are frozen.
         
         self.start_distance = max(self.distance_func(self.board1_landmarks, self.board2_guesses), 0.5)
         self.useless_action_flag = False
+        
+        # For testing: set the first shadow to present
+        if self.n_shadows > 0:
+            self.board2_questions[0] = (0, self.shadow_row)
         
     def sender_agent_view(self): # Sender agent can only see board 1.
         board1_img = np.zeros((self.size, self.size, 3), dtype = np.uint8)
@@ -110,11 +119,11 @@ class BoardsImplementation:
             board1_img[y, x, 0] = 255 # Landmarks on channel 0. (Red)
         for x, y in self.board1_clues:
             board1_img[y, x, 1] = 255 # Clues on channel 1. (Green)
-        for x, y in (self.board2_questions if self.linked_shadows else self.board1_q_shadows):
-            # If the shadows are linked we can just use the positions of objects generating them on the other board.
-            # TODO przepisać to co trzeba
-            board1_img[1, x, 2] = 255 # Shadows on channel 2. (Blue)
-            # Shadows can overlap with other objects.
+        for pos in (self.board2_questions if self.linked_shadows else self.board1_q_shadows):
+            if pos is not None:
+                x, y = pos
+                board1_img[1, x, 2] = 255 # Shadows on channel 2. (Blue)
+                # Shadows can overlap with other objects.
         return board1_img
     
     def receiver_agent_view(self): # Receiver agent can only see board 2.
@@ -125,13 +134,16 @@ class BoardsImplementation:
             if i < len(self.board1_landmarks) and (x, y) == self.board1_landmarks[i]:
                 board2_img[y, x, :] = [127, 127, 127]
 
-        for x, y in self.board2_questions:
-            board2_img[y, x, 1] = 255 # Questions on channel 1. (Green)
-        for x, y in (self.board1_clues if self.linked_shadows else self.board2_c_shadows):
-            # If the shadows are linked we can just use the positions of objects generating them on the other board.
-            # TODO przepisać to co trzeba
-            board2_img[1, x, 2] = 255 # Shadows on channel 2. (Blue)
-            # Shadows can overlap with other objects.
+        # Draw shadows (questions) only if present (not None)
+        for pos in self.board2_questions:
+            if pos is not None:
+                x, y = pos
+                board2_img[y, x, 2] = 255 # Shadows on channel 2. (Blue)
+        for pos in self.board2_questions:
+            print(pos)
+            if pos is not None:
+                x, y = pos
+                board2_img[y, x, 1] = 255 # Questions on channel 1. (Green) (optional, if you want to visualize questions)
         return board2_img
     
     def sender_agent_action(self, action_index: int):
@@ -169,20 +181,13 @@ class BoardsImplementation:
             return
         object_type, object_number, move_direction = action
         if object_type == "question":
-            old_position = self.board2_questions[object_number]
-            new_position = tuple(old_position + move_direction)
-            if new_position[0] < 0 or new_position[0] >= self.size or new_position[1] < 0 or new_position[1] >= self.size:
-                self.useless_action_flag = True
-                return # Avoiding getting off the board.
-            if new_position in self.board2_guesses or new_position in self.board2_questions:
-                self.useless_action_flag = True
-                return # Collision avoidance.
-            # All returns until now didn't change anything on the boards.
-            # That's because objects can't be pushed off the board or into other non-shadow objects.
-            self.board2_questions.pop(object_number)
-            self.board2_questions.append(new_position)
-            self.board2_questions.sort() # Unsure about that.
-            # It makes the control scheme not dependant on previous actions, but changes which actions correspond to which objects.
+            # Binary shadow channel logic: move_direction [0,0] means present, [-1,-1] means absent
+            if np.array_equal(move_direction, np.array([0, 0])):
+                self.board2_questions[object_number] = (object_number, self.shadow_row)
+            elif np.array_equal(move_direction, np.array([-1, -1])):
+                self.board2_questions[object_number] = self.shadow_absent_position
+            # No other moves allowed for shadows
+            return
         elif object_type == "guess":
             old_position = self.board2_guesses[object_number]
             new_position = tuple(old_position + move_direction)
